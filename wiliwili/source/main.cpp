@@ -19,6 +19,10 @@
 #include <SDL2/SDL_main.h>
 #endif
 
+#ifdef ANDROID
+#include <SDL_hints.h>
+#endif
+
 int main(int argc, char* argv[]) {
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "-d") == 0) {
@@ -35,6 +39,12 @@ int main(int argc, char* argv[]) {
 
     // Load cookies and settings
     ProgramConfig::instance().init();
+
+#ifdef ANDROID
+    // Trap the back button so it is passed to the app as SDL_SCANCODE_AC_BACK
+    // instead of exiting the app directly
+    SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
+#endif
 
     // Init the app and i18n
     if (!brls::Application::init()) {

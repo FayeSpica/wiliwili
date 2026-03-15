@@ -375,6 +375,23 @@ void MPVCore::init() {
 
     // Fix vo_wait_frame() cannot be wakeup
     mpvSetOptionString(mpv, "video-latency-hacks", "yes");
+#elif defined(ANDROID)
+    mpvSetOptionString(mpv, "vd-lavc-dr", "no");
+    {
+        const char* hdrEnv = getenv("WILIWILI_HDR_DISPLAY");
+        bool isHdrDisplay = (hdrEnv && hdrEnv[0] == '1');
+        brls::Logger::info("Display HDR support: {}", isHdrDisplay ? "yes" : "no");
+        if (isHdrDisplay) {
+            // HDR display: use float FBO + dumb mode for direct HDR passthrough
+            // gpu-dumb-mode avoids color conversion artifacts on some GPUs
+            // (e.g. Tegra) with mediacodec-copy P010 output
+            mpvSetOptionString(mpv, "fbo-format", "rgba16f");
+            mpvSetOptionString(mpv, "gpu-dumb-mode", "yes");
+        } else {
+            // SDR display: standard FBO, let mpv tone-map HDR content to SDR
+            mpvSetOptionString(mpv, "fbo-format", "rgba8");
+        }
+    }
 #endif
     // 过低的值可能导致部分直播流无法正确播放
     mpvSetOptionString(mpv, "demuxer-lavf-analyzeduration", "0.4");

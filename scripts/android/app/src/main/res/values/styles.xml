@@ -1,0 +1,5 @@
+<resources>
+    <!-- Base application theme for Android TV -->
+    <style name="AppTheme" parent="@android:style/Theme.NoTitleBar.Fullscreen">
+    </style>
+</resources>

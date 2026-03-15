@@ -4,7 +4,12 @@
 
 #ifdef IOS
 #include <CoreFoundation/CoreFoundation.h>
-#elif defined(__APPLE__) || defined(__linux__) || defined(_WIN32)
+#elif defined(ANDROID)
+#include <SDL_system.h>
+#include <fstream>
+#include "bilibili/util/http.hpp"
+#include <romfs/romfs.hpp>
+#elif defined(__APPLE__) || (defined(__linux__) && !defined(ANDROID)) || defined(_WIN32)
 #include <unistd.h>
 #include <borealis/platforms/desktop/desktop_platform.hpp>
 #if defined(_WIN32)
@@ -212,7 +217,7 @@ std::unordered_map<SettingItem, ProgramOption> ProgramConfig::SETTING_MAP = {
      {"tls_verify",
       {},
       {},
-#if defined(__PSV__) || defined(__SWITCH__) || defined(PS4)
+#if defined(__PSV__) || defined(__SWITCH__) || defined(PS4) || defined(ANDROID)
       0}},
 #else
       1}},
@@ -499,6 +504,8 @@ void ProgramConfig::load() {
 
     // 初始化自定义手柄按键映射
 #ifdef IOS
+#elif defined(ANDROID)
+    // Android uses SDL's built-in controller mappings
 #elif defined(__APPLE__) || defined(__linux__) || defined(_WIN32)
     brls::DesktopPlatform::GAMEPAD_DB = getConfigDir() + "/gamecontrollerdb.txt";
 #endif
@@ -1091,6 +1098,27 @@ void ProgramConfig::init() {
             VideoDetail::defaultQuality = WILI_VIDEO_QUALITY_DEFAULT;
         });
     BILI::setProxy(httpProxy, httpsProxy);
+#ifdef ANDROID
+    // Extract CA bundle from resources for SSL on Android
+    {
+        std::string caPath = getConfigDir() + "/cacert.pem";
+        if (!cpr::fs::exists(caPath)) {
+            auto& res = romfs::get("cacert.pem");
+            if (res.valid()) {
+                std::ofstream ofs(caPath, std::ios::binary);
+                ofs.write(reinterpret_cast<const char*>(res.data()), res.size());
+                ofs.close();
+                brls::Logger::info("Extracted CA bundle to: {}", caPath);
+            } else {
+                brls::Logger::error("Failed to load CA bundle from resources");
+            }
+        }
+        if (cpr::fs::exists(caPath)) {
+            bilibili::HTTP::CA_BUNDLE_PATH = caPath;
+            brls::Logger::info("Using CA bundle: {}", caPath);
+        }
+    }
+#endif
     BILI::setTlsVerify(getBoolOption(SettingItem::TLS_VERIFY));
     BILI::setHttpTimeout(getSettingItem(SettingItem::HTTP_TIMEOUT, 5000));
     BILI::setConnectionTimeout(getSettingItem(SettingItem::HTTP_CONNECTION_TIMEOUT, 0));
@@ -1102,6 +1130,10 @@ std::string ProgramConfig::getHomePath() {
     return "/";
 #elif defined(_WIN32)
     return std::string(getenv("HOMEPATH"));
+#elif defined(ANDROID)
+    const char* path = SDL_AndroidGetInternalStoragePath();
+    if (path) return std::string(path);
+    return "/data/local/tmp";
 #else
     return std::string(getenv("HOME"));
 #endif
@@ -1114,6 +1146,10 @@ std::string ProgramConfig::getConfigDir() {
     return "/data/wiliwili";
 #elif defined(__PSV__)
     return "ux0:/data/wiliwili";
+#elif defined(ANDROID)
+    const char* path = SDL_AndroidGetInternalStoragePath();
+    if (path) return std::string(path) + "/config";
+    return "/data/local/tmp/wiliwili";
 #elif defined(IOS)
     CFURLRef homeURL = CFCopyHomeDirectoryURL();
     if (homeURL != nullptr) {
@@ -1165,6 +1201,8 @@ void ProgramConfig::exit(char* argv[]) {
 #ifdef IOS
 #elif defined(PS4)
 #elif __PSV__
+#elif defined(ANDROID)
+    // Android app restart is handled by the Activity lifecycle
 #elif defined(__APPLE__) || defined(__linux__) || defined(_WIN32)
     if (!brls::DesktopPlatform::RESTART_APP) return;
 #ifdef __linux__

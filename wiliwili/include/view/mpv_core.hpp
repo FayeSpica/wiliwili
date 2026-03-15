@@ -370,6 +370,8 @@ public:
     inline static std::string PLAYER_HWDEC_METHOD = "vita-copy";
 #elif defined(PS4)
     inline static std::string PLAYER_HWDEC_METHOD = "no";
+#elif defined(ANDROID)
+    inline static std::string PLAYER_HWDEC_METHOD = "mediacodec-copy";
 #else
     inline static std::string PLAYER_HWDEC_METHOD = "auto-safe";
 #endif

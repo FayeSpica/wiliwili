@@ -1,0 +1,15 @@
+.gradle
+.idea
+local.properties
+*.iml
+build/
+app/build/
+app/.cxx/
+app/libs/
+app/jni/SDL
+app/jni/borealis
+app/src/main/java/org/
+gradlew
+gradlew.bat
+gradle/wrapper/gradle-wrapper.jar
+*.jks

@@ -4,7 +4,8 @@ set(BOREALIS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/library/borealis)
 set(BOREALIS_LIBRARY ${BOREALIS_DIR}/library)
 
 # Include Platform common options
-# wiliwili only support PLATFORM_DESKTOP and PLATFORM_SWITCH
+# wiliwili supports PLATFORM_DESKTOP, PLATFORM_SWITCH, PLATFORM_ANDROID, etc.
+# For Android TV build, see scripts/android/
 # example: cmake -B build -DPLATFORM_DESKTOP=ON
 include(${BOREALIS_LIBRARY}/cmake/commonOption.cmake)
 

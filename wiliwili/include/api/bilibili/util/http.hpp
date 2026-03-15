@@ -75,6 +75,7 @@ public:
     static inline int DNS_CACHE_TIMEOUT = 60;
     static inline cpr::Proxies PROXIES;
     static inline cpr::VerifySsl VERIFY;
+    static inline std::string CA_BUNDLE_PATH;
     static inline std::string PROTOCOL = "https:";
     static inline CurlSharedObject CURL_SHARE;
 
@@ -89,6 +90,11 @@ public:
         session->SetCookies(bilibili::HTTP::COOKIES);
         session->SetProxies(bilibili::HTTP::PROXIES);
         session->SetVerifySsl(bilibili::HTTP::VERIFY);
+#ifdef ANDROID
+        if (!bilibili::HTTP::CA_BUNDLE_PATH.empty()) {
+            curl_easy_setopt(curl, CURLOPT_CAINFO, bilibili::HTTP::CA_BUNDLE_PATH.c_str());
+        }
+#endif
         return session;
     }
 
