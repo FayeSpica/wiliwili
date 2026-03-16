@@ -82,7 +82,10 @@ public class WiliwiliActivity extends SDLActivity {
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
-        if (event.getKeyCode() == KeyEvent.KEYCODE_BACK) {
+        int keyCode = event.getKeyCode();
+
+        // BACK: send as native keyboard event instead of finishing activity
+        if (keyCode == KeyEvent.KEYCODE_BACK) {
             if (event.getAction() == KeyEvent.ACTION_DOWN) {
                 onNativeKeyDown(KeyEvent.KEYCODE_BACK);
                 return true;
@@ -91,6 +94,20 @@ public class WiliwiliActivity extends SDLActivity {
                 return true;
             }
         }
+
+        // DPAD_CENTER: remap to ENTER so SDL maps it to SDL_SCANCODE_RETURN
+        // which borealis handles as BUTTON_A (confirm).
+        // SDL maps DPAD_CENTER to SDL_SCANCODE_SELECT which borealis ignores.
+        if (keyCode == KeyEvent.KEYCODE_DPAD_CENTER) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                onNativeKeyDown(KeyEvent.KEYCODE_ENTER);
+                return true;
+            } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                onNativeKeyUp(KeyEvent.KEYCODE_ENTER);
+                return true;
+            }
+        }
+
         return super.dispatchKeyEvent(event);
     }
 }

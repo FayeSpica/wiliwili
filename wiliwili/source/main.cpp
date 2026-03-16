@@ -41,8 +41,6 @@ int main(int argc, char* argv[]) {
     ProgramConfig::instance().init();
 
 #ifdef ANDROID
-    // Trap the back button so it is passed to the app as SDL_SCANCODE_AC_BACK
-    // instead of exiting the app directly
     SDL_SetHint(SDL_HINT_ANDROID_TRAP_BACK_BUTTON, "1");
 #endif
 
