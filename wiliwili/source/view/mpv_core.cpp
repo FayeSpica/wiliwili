@@ -14,6 +14,16 @@
 #include "utils/crash_helper.hpp"
 #include "view/mpv_core.hpp"
 
+#ifdef __ANDROID__
+#include <jni.h>
+#include <SDL2/SDL_system.h>
+// 直接向 libavcodec 注册 JavaVM，避免为 ffmpeg header 做额外 include 配置。
+// 缺了这步，hevc_mediacodec / audiotrack / aimagereader 都会报
+// "No Java virtual machine has been registered" 并退化到软解。
+extern "C" int av_jni_set_java_vm(void* vm, void* log_ctx);
+extern "C" int av_jni_set_android_app_ctx(void* app_ctx, void* log_ctx);
+#endif
+
 #ifdef MPV_BUNDLE_DLL
 mpvSetOptionStringFunc mpvSetOptionString;
 mpvObservePropertyFunc mpvObserveProperty;
@@ -298,6 +308,31 @@ MPVCore::MPVCore() {
 
 void MPVCore::init() {
     setlocale(LC_NUMERIC, "C");
+
+#ifdef __ANDROID__
+    // 注册 JavaVM / Activity 到 libavcodec，使 hevc_mediacodec / h264_mediacodec /
+    // ao=audiotrack / aimagereader 能够正常初始化硬解。必须在 mpv_create 之前完成。
+    {
+        JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+        if (env) {
+            JavaVM* vm = nullptr;
+            if (env->GetJavaVM(&vm) == 0 && vm) {
+                int rc = av_jni_set_java_vm(vm, nullptr);
+                brls::Logger::info("av_jni_set_java_vm rc={}", rc);
+            } else {
+                brls::Logger::error("Failed to get JavaVM from JNIEnv");
+            }
+            if (jobject activity = static_cast<jobject>(SDL_AndroidGetActivity())) {
+                int rc = av_jni_set_android_app_ctx(activity, nullptr);
+                brls::Logger::info("av_jni_set_android_app_ctx rc={}", rc);
+                env->DeleteLocalRef(activity);
+            }
+        } else {
+            brls::Logger::error("SDL_AndroidGetJNIEnv returned null");
+        }
+    }
+#endif
+
     this->mpv = mpvCreate();
     if (!mpv) {
         brls::fatal("Error Create mpv Handle");
@@ -397,6 +432,18 @@ void MPVCore::init() {
     mpvSetOptionString(mpv, "demuxer-lavf-analyzeduration", "0.4");
     mpvSetOptionString(mpv, "demuxer-lavf-probescore", "24");
 
+    // 网络超时与断线自动重连：直播 HTTP-FLV / HLS 长连接在服务端断流或 TCP 挂起时，
+    // ffmpeg 默认会无限阻塞在 read()，导致画面定格但进程不退出。
+    // network-timeout 作用于 mpv 层 TCP 操作；rw_timeout 作用于 lavf 协议层 read/write；
+    // reconnect* 让 ffmpeg 在流中断后自动重连。
+    // 用单次赋值避免 -append 在部分 mpv 版本的解析差异；stream-lavf-o 影响 HTTP-FLV 长流，
+    // demuxer-lavf-o 影响 HLS 分片的重新拉取。
+    mpvSetOptionString(mpv, "network-timeout", "20");
+    const char* lavf_net_opts =
+        "rw_timeout=15000000,reconnect=1,reconnect_streamed=1,reconnect_delay_max=5";
+    mpvSetOptionString(mpv, "stream-lavf-o", lavf_net_opts);
+    mpvSetOptionString(mpv, "demuxer-lavf-o", lavf_net_opts);
+
     // log
     // mpvSetOptionString(mpv, "msg-level", "ffmpeg=trace");
     // mpvSetOptionString(mpv, "msg-level", "all=no");
@@ -411,6 +458,11 @@ void MPVCore::init() {
         mpvTerminateDestroy(mpv);
         brls::fatal("Could not initialize mpv context");
     }
+
+    // 把 mpv 内部（含 ffmpeg / http / demuxer / cache）的日志路由到 borealis::Logger，
+    // 否则 stream-lavf-o 和 reconnect 的实际行为在 logcat 里完全不可见。
+    // "info" 级别覆盖 ffmpeg 的 WARN/ERROR + mpv 的 INFO；"v" 更详细但会很吵。
+    mpv_request_log_messages(mpv, "info");
 
     // set observe properties
     check_error(mpvObserveProperty(mpv, 1, "core-idle", MPV_FORMAT_FLAG));
@@ -1188,6 +1240,17 @@ void MPVCore::reset() {
 
 void MPVCore::setUrl(const std::string &url, const std::string &extra, const std::string &method) {
     brls::Logger::debug("{} Url: {}, extra: {}", method, url, extra);
+
+#ifdef __ANDROID__
+    // Android/Tegra 上 mediacodec-copy 跨 loadfile replace 会导致旧 MediaCodec 实例
+    // 未能干净释放，累积后新视频 hevc_mediacodec 拿到 NULL native_window。
+    // 显式 stop 让 mpv 在核心线程上顺序销毁当前解码器，再在同一 queue 上 loadfile，
+    // 确保新 configure 时底层 slot 已归还。append 模式不做处理（它是往 playlist 加）。
+    if (method.empty() || method == "replace") {
+        command_async("stop");
+    }
+#endif
+
     if (extra.empty()) {
         command_async("loadfile", url, method);
     } else {

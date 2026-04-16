@@ -133,6 +133,14 @@ set_target_properties(mpv PROPERTIES
     INTERFACE_INCLUDE_DIRECTORIES ${CMAKE_CURRENT_SOURCE_DIR}/mpv-android/include
 )
 
+# avcodec 需要显式链接，以便调用 av_jni_set_java_vm / av_jni_set_android_app_ctx
+# 注册 JavaVM，否则 hevc_mediacodec / ao=audiotrack / aimagereader 会报
+# "No Java virtual machine has been registered" 并退化到软解。
+add_library(avcodec SHARED IMPORTED)
+set_target_properties(avcodec PROPERTIES
+    IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}/../libs/${ANDROID_ABI}/libavcodec.so
+)
+
 # Main target - shared library for Android
 add_library(wiliwili SHARED ${MAIN_SRC})
 set_target_properties(wiliwili PROPERTIES CXX_STANDARD 17)
@@ -161,6 +169,7 @@ target_link_libraries(wiliwili PRIVATE
     pdr
     mongoose
     mpv
+    avcodec
     z
     SDL2
 )

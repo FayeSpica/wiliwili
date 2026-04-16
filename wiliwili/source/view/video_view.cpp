@@ -1523,7 +1523,11 @@ void VideoView::registerMpvEvent() {
                 // 播放结束自动取消全屏
                 this->showOSD(false);
                 if (EXIT_FULLSCREEN_ON_END && closeOnEndOfFile && this->isFullscreen()) {
-                    this->setFullScreen(false);
+                    // 自动连播 (NEXT / RCMD) 和循环 (LOOP) 场景下，播放即将切到下一个
+                    // 内容，退出全屏会打断观看连贯性；只有 SINGLE 模式才退出全屏。
+                    if (BasePlayerActivity::PLAYER_STRATEGY == PlayerStrategy::SINGLE) {
+                        this->setFullScreen(false);
+                    }
                 }
                 break;
             case MpvEventEnum::CACHE_SPEED_CHANGE:

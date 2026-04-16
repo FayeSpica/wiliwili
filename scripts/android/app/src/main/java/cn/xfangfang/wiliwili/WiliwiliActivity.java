@@ -108,6 +108,21 @@ public class WiliwiliActivity extends SDLActivity {
             }
         }
 
+        // MENU (3-dot) / INFO / GUIDE: TV 遥控器通常没有物理 X/Y 键，把这几个不常用
+        // 的多媒体键重映射到 BUTTON_X，这样所有已有的 BUTTON_X 绑定（刷新/切换/过滤）
+        // 都能在遥控器上触发。
+        if (keyCode == KeyEvent.KEYCODE_MENU
+                || keyCode == KeyEvent.KEYCODE_INFO
+                || keyCode == KeyEvent.KEYCODE_GUIDE) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                onNativeKeyDown(KeyEvent.KEYCODE_BUTTON_X);
+                return true;
+            } else if (event.getAction() == KeyEvent.ACTION_UP) {
+                onNativeKeyUp(KeyEvent.KEYCODE_BUTTON_X);
+                return true;
+            }
+        }
+
         return super.dispatchKeyEvent(event);
     }
 }

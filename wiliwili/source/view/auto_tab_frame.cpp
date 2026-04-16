@@ -19,11 +19,40 @@
 
 #include <tinyxml2.h>
 #include <borealis/views/rectangle.hpp>
+#include <chrono>
+#include <memory>
 #include <utility>
 
 #include "view/auto_tab_frame.hpp"
 #include "view/svg_image.hpp"
 #include "view/button_refresh.hpp"
+
+namespace {
+// TV 遥控器通常没有 X / Y 物理键。当 BUTTON_X 绑定到 tab bar（通常是刷新/切换/过滤等次级
+// 操作），额外在 tab 上绑定 BUTTON_NAV_UP 的双击检测：光标已经在 tab 上再连按两下 UP，
+// 等价于 BUTTON_X，从而让 TV 用户只用方向键也能触发刷新。
+constexpr auto kDoubleUpWindow = std::chrono::milliseconds(500);
+
+void bindDoubleUpAsButtonX(brls::View* tab, const brls::ActionListener& action) {
+    if (!tab) return;
+    auto lastTime = std::make_shared<std::chrono::steady_clock::time_point>();
+    tab->registerAction(
+        "", brls::BUTTON_NAV_UP,
+        [action, lastTime](brls::View* view) -> bool {
+            auto now = std::chrono::steady_clock::now();
+            auto elapsed =
+                std::chrono::duration_cast<std::chrono::milliseconds>(now - *lastTime);
+            *lastTime = now;
+            if (elapsed < kDoubleUpWindow) {
+                *lastTime = {};  // 消耗掉这次命中，避免第三下误触
+                return action(view);
+            }
+            // 首次 UP 不消费事件，让焦点系统继续处理（已经在顶部时是 no-op）
+            return false;
+        },
+        /*hidden=*/true);
+}
+}  // namespace
 
 /**
  * auto tab frame
@@ -1044,6 +1073,7 @@ void AttachedView::registerTabAction(std::string hintText, enum brls::Controller
                                      brls::ActionListener action, bool hidden, bool allowRepeating, enum brls::Sound sound) {
     this->registerAction(hintText, button, action, hidden, allowRepeating, sound);
     if (this->tab) this->tab->registerAction(hintText, button, action, hidden, allowRepeating, sound);
+    if (button == brls::BUTTON_X) bindDoubleUpAsButtonX(this->tab, action);
 }
 
 void AttachedView::registerTabAction(const std::string& hintText, const brls::ControllerButton button,
@@ -1055,6 +1085,7 @@ void AttachedView::registerTabAction(const std::string& hintText, const brls::Co
         this->tab->registerAction(hintText, button, action, hidden, allowRepeating, sound);
         this->tab->registerAction(key, action, allowRepeating);
     }
+    if (button == brls::BUTTON_X) bindDoubleUpAsButtonX(this->tab, action);
 }
 
 AttachedView::AttachedView() { this->setGrow(1); }
