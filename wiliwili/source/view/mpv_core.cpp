@@ -381,9 +381,13 @@ void MPVCore::init() {
 
     if (MPVCore::INMEMORY_CACHE) {
         // cache
+        // 用户设置决定字节上限，但至少保证能撑得起 10 秒的 1080p HDR 流 readahead
+        // （新版 ffmpeg 不再像旧 leaky build 那样意外多留包，必须显式给够）
         brls::Logger::info("set memory cache: {}MB", MPVCore::INMEMORY_CACHE);
         mpvSetOptionString(mpv, "demuxer-max-bytes", fmt::format("{}MiB", MPVCore::INMEMORY_CACHE).c_str());
         mpvSetOptionString(mpv, "demuxer-max-back-bytes", fmt::format("{}MiB", MPVCore::INMEMORY_CACHE / 2).c_str());
+        mpvSetOptionString(mpv, "cache-secs", "10");
+        mpvSetOptionString(mpv, "demuxer-readahead-secs", "5");
     } else {
         mpvSetOptionString(mpv, "cache", "no");
     }
