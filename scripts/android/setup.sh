@@ -20,6 +20,20 @@ if [ ! -f "$BOREALIS_DIR/CMakeLists.txt" ]; then
     git -C "$PROJECT_ROOT" submodule update --init --recursive
 fi
 
+# Patch bundled SDL 2.28.5 for Android NDK r28+ compatibility:
+# ALooper_pollAll was deprecated in NDK r28 and removed in NDK r29,
+# so SDL won't link. Swap it for ALooper_pollOnce (same semantics here
+# because we pass outFd=NULL). Idempotent — re-running is a no-op.
+SDL_SENSOR_C="$BOREALIS_DIR/library/lib/extern/SDL/src/sensor/android/SDL_androidsensor.c"
+if [ -f "$SDL_SENSOR_C" ] && grep -q "ALooper_pollAll" "$SDL_SENSOR_C"; then
+    echo "Patching SDL for NDK r29 (ALooper_pollAll -> ALooper_pollOnce)..."
+    if [ "$(uname)" = "Darwin" ]; then
+        sed -i '' 's/ALooper_pollAll/ALooper_pollOnce/g' "$SDL_SENSOR_C"
+    else
+        sed -i 's/ALooper_pollAll/ALooper_pollOnce/g' "$SDL_SENSOR_C"
+    fi
+fi
+
 # Create symlinks in jni directory
 echo "Creating symlinks..."
 
